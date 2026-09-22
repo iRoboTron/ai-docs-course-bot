@@ -7,32 +7,80 @@
 
 ## Что понадобится
 
-Пройденные модули 1-6 в [ai-docs-course](https://github.com/iRoboTron/ai-docs-course) —
-код в `app/rag.py` дословно перенесён из `notebooks/modul6__01_citaty_i_kachestvo.py`,
-без нового объяснения того, что уже разобрано в курсе.
+- Пройденные модули 1-6 в [ai-docs-course](https://github.com/iRoboTron/ai-docs-course) —
+  код в `app/rag.py` дословно перенесён из `notebooks/modul6__01_citaty_i_kachestvo.py`,
+  без нового объяснения того, что уже разобрано в курсе.
+- **Python 3.12** (та же версия, что в CI — `.github/workflows/ci.yml`).
+- Ключ или код доступа к прокси курса (`AI_KEY`) — тот же, что вводили в Colab
+  через `getpass`. Для тестов и знакомства с кодом реальный ключ не нужен, только
+  для настоящего запуска сервиса и вызова `/ask` с реальной моделью.
+- Интернет при **первом** запуске: `sentence-transformers` скачивает веса модели
+  `intfloat/multilingual-e5-small` с Hugging Face (несколько сотен МБ, пару минут
+  на обычном канале). При следующих запусках модель берётся из локального кэша
+  Hugging Face (`~/.cache/huggingface`) и интернет для неё уже не нужен.
 
 ## Устройство
 
-- `app/rag.py` — поиск, ответ с цитатой, проверка цитаты и чисел (модули 4-6).
-- `app/main.py` — `GET /health`, `POST /ask`.
-- `app/config.py` — настройки из переменных окружения: `AI_BASE_URL`, `AI_MODEL`, `AI_KEY`.
-- `tests/` — проверки без сети и без модели: чистая логика (`test_rag_checks.py`)
-  и API с подставным индексом и подставным ответом модели (`test_api.py`).
+```
+app/
+  main.py      — FastAPI: GET /health, POST /ask
+  rag.py       — поиск, ответ с цитатой, проверка цитаты и чисел (модули 4-6)
+  storage.py   — файловый кэш эмбеддингов, ключ по содержимому (модуль 7, урок 2)
+  config.py    — настройки из переменных окружения
+tests/
+  test_rag_checks.py  — чистая логика (proverit_citatu, proverit_chisla) — без сети
+  test_api.py         — API с подставным индексом и подставным ответом модели
+  test_storage.py     — кэш на диске: round-trip и инвалидация — без модели
+.github/workflows/ci.yml — pytest на каждый push и pull request
+```
 
-## Запуск
+## Установка и запуск
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+git clone https://github.com/iRoboTron/ai-docs-course-bot.git
+cd ai-docs-course-bot
 
-export AI_KEY=...          # ключ или код доступа из секретов курса
+python3 -m venv .venv
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
+
+pip install -r requirements-dev.txt
+```
+
+Переменные окружения — как в Colab-версии, только через `export`, а не `getpass`:
+
+```bash
+export AI_KEY=...                                    # обязательно
+export AI_BASE_URL=https://ai9.adelfos.ru/api/v1      # по умолчанию, можно не задавать
+export AI_MODEL=qwen/qwen3.7-flash                     # по умолчанию, можно не задавать
+```
+
+Запуск сервиса:
+
+```bash
 uvicorn app.main:app --reload
 ```
+
+`--reload` перезапускает процесс при изменении файлов — удобно при разработке,
+но каждый перезапуск теряет то, что не сохранено в файловом кэше (`.index_cache/`,
+см. раздел «Хранилище» ниже). Для продакшена флаг убирают.
+
+Проверка, что сервис жив:
+
+```bash
+curl localhost:8000/health
+# {"status":"ok"}
+```
+
+Настоящий запрос (нужен рабочий `AI_KEY`):
 
 ```bash
 curl -X POST localhost:8000/ask -H 'content-type: application/json' \
   -d '{"vopros": "Какая у вас гарантия на ремонт?"}'
 ```
+
+Первый вызов `/ask` после чистого старта строит индекс: качает страницы сайта,
+режет на куски, считает эмбеддинги (или берёт их из `.index_cache/`, если кэш
+совпадает) — уйдёт несколько секунд. Следующие вызовы в том же процессе быстрее.
 
 ## Тесты
 
@@ -40,14 +88,47 @@ curl -X POST localhost:8000/ask -H 'content-type: application/json' \
 AI_KEY=fake PYTHONPATH=. pytest -q
 ```
 
-Тесты не ходят в сеть и не зовут модель: `Indeks` и `sprosit_json` в `otvetit()`
-подменяются на фейковые (`tests/test_api.py`), поэтому CI проходит без ключа и без
-доступа к прокси курса.
+`AI_KEY` можно оставить любым нереальным значением: тесты не ходят в сеть и не
+зовут модель. `Indeks` и `sprosit_json` в `otvetit()` подменяются на фейковые
+(`tests/test_api.py`), файловый кэш тестируется отдельно на временной директории
+(`tests/test_storage.py`, фикстура `tmp_path`) — поэтому CI проходит без ключа и
+без доступа к прокси курса.
+
+Запуск одного файла или одного теста — как обычно в pytest:
+
+```bash
+AI_KEY=fake PYTHONPATH=. pytest tests/test_rag_checks.py -q
+AI_KEY=fake PYTHONPATH=. pytest tests/test_api.py::test_ask_otkazyvaet_kogda_citata_pridumana -q
+```
+
+## Как вносить изменения
+
+1. **Логика RAG и проверок** — в `app/rag.py`. Если меняете что-то, что уже
+   разобрано в курсе (`proverit_citatu`, `proverit_chisla`, `narezka_po_zagolovkam`),
+   держите код синхронным по смыслу с `notebooks/modul6__01_citaty_i_kachestvo.py`
+   в основном репозитории курса — это не жёсткое правило CI, а соглашение проекта.
+2. **Новый эндпоинт** — в `app/main.py`: обычный FastAPI-роут, `Vopros`/новая
+   `pydantic`-модель для тела запроса при необходимости.
+3. **Тест на новое поведение** — рядом, в `tests/`, по образцу уже существующих:
+   для чистой логики без сети смотрите `test_rag_checks.py`/`test_storage.py`, для
+   API с подставными зависимостями — `test_api.py` (`FakeIndeks`, фейковый `ask`).
+   Правило простое: если тест не может обойтись без реального `AI_KEY` — он,
+   скорее всего, тестирует не ту границу и его стоит переписать через подмену
+   зависимостей.
+4. **Перед коммитом** — прогнать `pytest` локально (см. выше). CI (`.github/workflows/ci.yml`)
+   прогоняет ровно ту же команду на каждый push и pull request в `main`; зелёный
+   локально почти всегда значит зелёный в CI, потому что тесты не зависят от
+   внешнего состояния.
+5. **PR** — правила репозитория курса такие же, как для любого проекта на
+   GitHub: ветка, пул-реквест, зелёный CI перед мержем.
 
 ## Хранилище
 
 Эмбеддинги кэшируются на диске (`app/storage.py`): ключ кэша — хэш текста кусков,
 не дата и не версия, так что при изменении сайта кэш просто пересчитывается сам.
+Кэш живёт в `.index_cache/` рядом с процессом (переопределяется переменной
+`INDEX_CACHE_DIR`) и не попадает в git (см. `.gitignore`).
+
 Честный замер (модуль 7, урок 2): загрузка модели эмбеддингов — 9,4 с, кодирование
 30 кусков — 0,76 с. Кэш ускоряет вторую часть; холодный старт всё ещё определяет
 первая. SQLite/pgvector — когда понадобятся частичные обновления или несколько
