@@ -12,6 +12,7 @@ from functools import lru_cache
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer, util
 
+from app import storage
 from app.config import API_KEY, BASE_URL, MODEL, SITE_BASE, SITE_STRANICY
 
 PRAVILA_V6 = """Ты помощник сервисного центра «Полярис».
@@ -85,8 +86,13 @@ class Indeks:
     def __init__(self, kuski, model_name="intfloat/multilingual-e5-small"):
         self.kuski = kuski
         self.emb = SentenceTransformer(model_name)
-        self.vektory = self.emb.encode(
-            [f"passage: {k['istochnik']} {k['tekst']}" for k in kuski], normalize_embeddings=True)
+        vektory_iz_kesha = storage.zagruzit(kuski)
+        if vektory_iz_kesha is not None:
+            self.vektory = vektory_iz_kesha
+        else:
+            self.vektory = self.emb.encode(
+                [f"passage: {k['istochnik']} {k['tekst']}" for k in kuski], normalize_embeddings=True)
+            storage.sohranit(kuski, self.vektory)
 
     def nayti(self, vopros, k=3, porog=0.80):
         vektor = self.emb.encode(f"query: {vopros}", normalize_embeddings=True)
@@ -105,13 +111,9 @@ def skachat_stranicy(baza=SITE_BASE, imena=SITE_STRANICY):
 
 @lru_cache
 def zagruzit_indeks():
-    """Строится один раз при первом запросе и живёт, пока жив процесс сервиса.
-
-    В модуле 7 хранилище — этот же приём, что в модулях 4-6: куски и эмбеддинги
-    в памяти процесса. Файловое/SQLite/pgvector хранилище — следующий урок:
-    здесь важно, что от него ожидает остальной код (nayti(vopros) -> список кусков),
-    а не как именно куски лежат на диске.
-    """
+    """Строится при первом запросе и живёт, пока жив процесс — но теперь эмбеддинги
+    ещё и лежат в файловом кэше (`app/storage.py`), так что **перезапуск** процесса
+    не значит пересчёт заново (модуль 7, урок 2)."""
     stranicy = skachat_stranicy()
     kuski = narezka_po_zagolovkam(stranicy)
     return Indeks(kuski)
