@@ -3,3 +3,5 @@ uvicorn[standard]
 openai
 sentence-transformers
 pydantic
+langchain-core
+langchain-openai

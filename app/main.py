@@ -18,6 +18,7 @@ class Vopros(BaseModel):
 
 
 class ChatZapros(BaseModel):
+    session_id: str
     vopros: str
 
 
@@ -37,7 +38,7 @@ def chat_endpoint(zapros: ChatZapros):
     За проверенным фактом гость всё ещё идёт в /ask (модуль 6-7)."""
 
     def sobytiya():
-        for kusok in chat.poток_otveta(zapros.vopros):
+        for kusok in chat.poток_otveta(zapros.session_id, zapros.vopros):
             yield f"data: {json.dumps({'tekst': kusok}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
 

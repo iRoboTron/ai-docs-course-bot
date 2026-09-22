@@ -60,8 +60,8 @@ def test_ask_endpoint_ispolzuet_otvetit(monkeypatch):
 
 def test_chat_endpoint_streamit_kuski_v_sse(monkeypatch):
     import app.chat as chat_module
-    monkeypatch.setattr(chat_module, "poток_otveta", lambda vopros: iter(["При", "вет"]))
-    response = client.post("/chat", json={"vopros": "Привет"})
+    monkeypatch.setattr(chat_module, "poток_otveta", lambda session_id, vopros: iter(["При", "вет"]))
+    response = client.post("/chat", json={"session_id": "t1", "vopros": "Привет"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     assert 'data: {"tekst": "При"}' in response.text

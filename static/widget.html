@@ -10,11 +10,13 @@
 </style>
 </head>
 <body>
-<h3>Полярис: чат (демо потока, без памяти — урок 1)</h3>
+<h3>Полярис: чат (поток + память диалога — модуль 8)</h3>
 <div id="log"></div>
 <input id="vopros" placeholder="Ваш вопрос">
 <button onclick="sprosit()">Спросить</button>
 <script>
+const sessionId = crypto.randomUUID();  // одна вкладка — одна сессия, одна память
+
 async function sprosit() {
   const vopros = document.getElementById('vopros').value;
   const log = document.getElementById('log');
@@ -23,7 +25,7 @@ async function sprosit() {
   const otvet = await fetch('/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ vopros }),
+    body: JSON.stringify({ session_id: sessionId, vopros }),
   });
   const chitatel = otvet.body.getReader();
   const dekoder = new TextDecoder();
