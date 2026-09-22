@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Полярис: чат</title>
+<style>
+  body { font-family: sans-serif; max-width: 520px; margin: 40px auto; }
+  #log { border: 1px solid #ccc; padding: 12px; min-height: 200px; white-space: pre-wrap; }
+  #vopros { width: 80%; }
+</style>
+</head>
+<body>
+<h3>Полярис: чат (демо потока, без памяти — урок 1)</h3>
+<div id="log"></div>
+<input id="vopros" placeholder="Ваш вопрос">
+<button onclick="sprosit()">Спросить</button>
+<script>
+async function sprosit() {
+  const vopros = document.getElementById('vopros').value;
+  const log = document.getElementById('log');
+  log.textContent += '\n❓ ' + vopros + '\n🤖 ';
+
+  const otvet = await fetch('/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ vopros }),
+  });
+  const chitatel = otvet.body.getReader();
+  const dekoder = new TextDecoder();
+  let bufer = '';
+  while (true) {
+    const { done, value } = await chitatel.read();
+    if (done) break;
+    bufer += dekoder.decode(value, { stream: true });
+    const stroki = bufer.split('\n\n');
+    bufer = stroki.pop();  // последний кусок может быть неполным
+    for (const stroka of stroki) {
+      if (!stroka.startsWith('data: ')) continue;
+      const dannye = stroka.slice(6);
+      if (dannye === '[DONE]') continue;
+      log.textContent += JSON.parse(dannye).tekst;
+    }
+  }
+}
+</script>
+</body>
+</html>

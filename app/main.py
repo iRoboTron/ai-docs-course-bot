@@ -1,13 +1,23 @@
-"""Каркас сервиса из модуля 7: FastAPI поверх RAG из модуля 6."""
+"""Каркас сервиса из модуля 7 (RAG с проверками) + модуль 8 (диалог)."""
+import json
+
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import app.chat as chat
 from app.rag import otvetit
 
 app = FastAPI(title="Полярис: бот для сайта")
+app.mount("/widget", StaticFiles(directory="static"), name="static")
 
 
 class Vopros(BaseModel):
+    vopros: str
+
+
+class ChatZapros(BaseModel):
     vopros: str
 
 
@@ -19,3 +29,16 @@ def health():
 @app.post("/ask")
 def ask(zapros: Vopros):
     return otvetit(zapros.vopros)
+
+
+@app.post("/chat")
+def chat_endpoint(zapros: ChatZapros):
+    """Диалог: поток без проверки цитат — для живого общения, не для фактов.
+    За проверенным фактом гость всё ещё идёт в /ask (модуль 6-7)."""
+
+    def sobytiya():
+        for kusok in chat.poток_otveta(zapros.vopros):
+            yield f"data: {json.dumps({'tekst': kusok}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(sobytiya(), media_type="text/event-stream")

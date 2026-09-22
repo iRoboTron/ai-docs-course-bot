@@ -56,3 +56,19 @@ def test_ask_endpoint_ispolzuet_otvetit(monkeypatch):
     response = client.post("/ask", json={"vopros": "Во сколько вы закрываетесь?"})
     assert response.status_code == 200
     assert response.json()["otvet"] == "заглушка"
+
+
+def test_chat_endpoint_streamit_kuski_v_sse(monkeypatch):
+    import app.chat as chat_module
+    monkeypatch.setattr(chat_module, "poток_otveta", lambda vopros: iter(["При", "вет"]))
+    response = client.post("/chat", json={"vopros": "Привет"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert 'data: {"tekst": "При"}' in response.text
+    assert response.text.strip().endswith("data: [DONE]")
+
+
+def test_widget_razdayotsya_statikoy():
+    response = client.get("/widget/widget.html")
+    assert response.status_code == 200
+    assert "Полярис" in response.text
