@@ -6,13 +6,14 @@
 import html
 import json
 import re
+import time
 import urllib.request
 from functools import lru_cache
 
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer, util
 
-from app import storage
+from app import observability, storage
 from app.config import API_KEY, BASE_URL, MODEL, SITE_BASE, SITE_STRANICY
 
 PRAVILA_V6 = """Ты помощник сервисного центра «Полярис».
@@ -120,11 +121,13 @@ def zagruzit_indeks():
 
 
 def sprosit_json(client, vopros, kuski, pravila=PRAVILA_V6, model=MODEL):
+    nachalo = time.perf_counter()
     dannye = "\n\n".join(f"[источник: {k['istochnik']}]\n{k['tekst']}" for k in kuski)
     otvet = client.chat.completions.create(
         model=model, temperature=0, max_tokens=300, response_format={"type": "json_object"},
         messages=[{"role": "system", "content": pravila},
                   {"role": "user", "content": f"ДАННЫЕ:\n{dannye}\n\nВОПРОС: {vopros}"}])
+    observability.zapisat("ask", vopros, otvet, nachalo)
     syroy = (otvet.choices[0].message.content or "").strip()
     try:
         return json.loads(syroy)

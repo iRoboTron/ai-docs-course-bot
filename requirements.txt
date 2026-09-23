@@ -5,3 +5,4 @@ sentence-transformers
 pydantic
 langchain-core
 langchain-openai
+litellm
