@@ -72,3 +72,12 @@ def test_widget_razdayotsya_statikoy():
     response = client.get("/widget/widget.html")
     assert response.status_code == 200
     assert "Полярис" in response.text
+
+
+def test_chat_endpoint_otdayot_429_pri_prevyshenii_limita(monkeypatch):
+    import app.main as main_module
+    from app import limits
+    limits.ZAPROSY.clear()
+    monkeypatch.setattr(main_module, "prevysen_limit", lambda session_id: True)
+    response = client.post("/chat", json={"session_id": "t1", "vopros": "Привет"})
+    assert response.status_code == 429
