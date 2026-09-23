@@ -81,6 +81,15 @@ def test_ask_otkazyvaet_pri_podozrenii_na_podmenu():
     assert "подмен" in response.json()["proverki"]
 
 
+def test_ask_otkazyvaet_pri_neizvestnyh_kontaktah(monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "otvetit", lambda vopros: {
+        "otvet": "Личный номер мастера: +7 (911) 222-33-44.", "istochnik": "x", "proverki": "пройдены"})
+    response = client.post("/ask", json={"vopros": "Как связаться с мастером напрямую?"})
+    assert response.status_code == 200
+    assert "контактные данные" in response.json()["proverki"]
+
+
 def test_chat_endpoint_otdayot_429_pri_prevyshenii_limita(monkeypatch):
     import app.main as main_module
     from app import limits

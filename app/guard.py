@@ -46,3 +46,36 @@ def podozritelnyy_vopros(vopros):
         return False
     except ValidationError:
         return True
+
+
+# Модуль 10, урок 2: личные данные в ответе — с оговоркой. У «Полярис» есть
+# СВОЙ публичный телефон и почта (kontakty.html) — наивная проверка «похоже
+# на телефон» заблокирует законный ответ на «как с вами связаться?». Поэтому
+# проверяем не «есть ли похожее на телефон», а «есть ли то, что НЕ входит
+# в список уже опубликованных на сайте контактов».
+PATTERN_TELEFON = re.compile(r"(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}")
+PATTERN_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
+
+RAZRESHENNYE_KONTAKTY = {"+7 (999) 000-00-00", "help@polaris-service.example"}
+
+
+@register_validator(name="net-neizvestnyh-dannyh", data_type="string")
+class NetNeizvestnyhDannyh(Validator):
+    """Ищет телефон/почту в ответе, которых нет в списке уже опубликованных контактов."""
+
+    def _validate(self, value, metadata):
+        naydennoe = PATTERN_TELEFON.findall(value) + PATTERN_EMAIL.findall(value)
+        neizvestnoe = [n for n in naydennoe if n not in RAZRESHENNYE_KONTAKTY]
+        if neizvestnoe:
+            return FailResult(error_message=f"в ответе неопубликованные контактные данные: {neizvestnoe}")
+        return PassResult()
+
+
+def soderzhit_neizvestnye_dannye(otvet):
+    """True, если в ответе есть телефон/почта, которых нет в RAZRESHENNYE_KONTAKTY."""
+    guard = Guard().use(NetNeizvestnyhDannyh(on_fail="exception"))
+    try:
+        guard.validate(otvet)
+        return False
+    except ValidationError:
+        return True

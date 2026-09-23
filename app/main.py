@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import app.chat as chat
-from app.guard import podozritelnyy_vopros
+from app.guard import podozritelnyy_vopros, soderzhit_neizvestnye_dannye
 from app.limits import prevysen_limit
 from app.rag import otvetit
 
@@ -33,7 +33,11 @@ def health():
 def ask(zapros: Vopros):
     if podozritelnyy_vopros(zapros.vopros):
         return {"otvet": "Не могу обработать такой вопрос.", "istochnik": "", "proverki": "подозрение на подмену инструкций"}
-    return otvetit(zapros.vopros)
+    rezultat = otvetit(zapros.vopros)
+    if soderzhit_neizvestnye_dannye(rezultat.get("otvet", "")):
+        return {"otvet": "Не могу показать этот ответ.", "istochnik": "",
+                "proverki": "неопубликованные контактные данные"}
+    return rezultat
 
 
 @app.post("/chat")
