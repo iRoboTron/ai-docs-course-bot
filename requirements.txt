@@ -6,3 +6,4 @@ pydantic
 langchain-core
 langchain-openai
 litellm
+guardrails-ai
